@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sky Fighter - 國語問答大冒險</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a202c;
+            font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        #admin-btn-wrapper {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 9999;
+            pointer-events: auto;
+        }
+        #ui-layer {
+            pointer-events: none;
+        }
+        .admin-modal {
+            z-index: 10000;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+
+    <div id="game-container" class="relative w-full h-full max-w-[500px] overflow-hidden bg-sky-400 shadow-2xl">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- 管理者齒輪按鈕 -->
+        <div id="admin-btn-wrapper">
+            <button id="admin-entrance" class="w-10 h-10 flex items-center justify-center bg-black/20 hover:bg-black/40 rounded-full transition-all text-lg border border-white/10">
+                ⚙️
+            </button>
+        </div>
+
+        <!-- UI 資訊層 -->
+        <div id="ui-layer" class="absolute inset-0 p-4 flex flex-col justify-between text-white">
+            <div class="flex justify-between items-start">
+                <div class="mt-12">
+                    <div class="bg-black/30 backdrop-blur-md p-2 rounded-lg">
+                        <p class="text-xs uppercase tracking-widest opacity-70">Score</p>
+                        <p id="score-val" class="text-2xl font-bold">0000</p>
+                    </div>
+                </div>
+                <div class="bg-black/30 backdrop-blur-md p-2 rounded-lg text-right">
+                    <p class="text-xs uppercase tracking-widest opacity-70">Health</p>
+                    <div class="w-24 h-3 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                        <div id="health-bar" class="h-full bg-red-500 transition-all duration-300" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 開始/遊戲結束選單 -->
+            <div id="menu" class="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-auto backdrop-blur-sm">
+                <div class="text-center p-8 bg-white/10 rounded-3xl border border-white/20 shadow-2xl">
+                    <h1 class="text-4xl font-black mb-4 tracking-tighter italic text-white">SKY STORM</h1>
+                    <p class="mb-2 opacity-80 font-bold text-yellow-400">國語問答冒險</p>
+                    <p class="mb-6 text-sm text-white/80">拖移你的飛機以攻擊敵機<br>運用你的火力清空戰場並穿過答案！</p>
+                    <button id="start-btn" class="px-8 py-3 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded-full transition-transform active:scale-95 shadow-[0_4px_0_0_#ca8a04]">
+                        開始作戰
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 管理者全螢幕頁面 -->
+        <div id="admin-modal" class="hidden absolute inset-0 bg-slate-950 flex items-center justify-center p-4 admin-modal overflow-y-auto no-scrollbar">
+            <div class="w-full max-w-md bg-slate-900 rounded-3xl p-6 border border-white/10 shadow-2xl text-white">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-yellow-400">管理中心</h2>
+                        <p class="text-xs text-white/40">遊戲已暫停</p>
+                    </div>
+                    <button id="close-admin-btn" class="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500/20 rounded-full text-white">✕</button>
+                </div>
+                
+                <div class="mb-8 p-4 bg-white/5 rounded-2xl border border-white/5">
+                    <h3 class="text-sm font-bold mb-4 text-sky-400">新增題目</h3>
+                    <input id="new-q" type="text" placeholder="輸入題目內容" class="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm mb-3 outline-none focus:border-yellow-500">
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <input id="opt-0" type="text" placeholder="選項 1" class="bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none">
+                        <input id="opt-1" type="text" placeholder="選項 2" class="bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none">
+                        <input id="opt-2" type="text" placeholder="選項 3" class="bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none">
+                        <input id="opt-3" type="text" placeholder="選項 4" class="bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none">
+                    </div>
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="text-xs text-white/50">正確答案編號：</label>
+                        <select id="correct-idx" class="bg-slate-800 border border-white/20 rounded-lg text-xs p-2">
+                            <option value="0">選項 1</option>
+                            <option value="1">選項 2</option>
+                            <option value="2">選項 3</option>
+                            <option value="3">選項 4</option>
+                        </select>
+                    </div>
+                    <button id="save-q-btn" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl font-bold text-sm">儲存題目</button>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-bold mb-4 text-white/60">目前題庫</h3>
+                    <div id="question-list" class="space-y-2 max-h-[250px] overflow-y-auto pr-2 no-scrollbar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score-val');
+        const healthBar = document.getElementById('health-bar');
+        const menu = document.getElementById('menu');
+        const startBtn = document.getElementById('start-btn');
+        const adminEntrance = document.getElementById('admin-entrance');
+        const adminModal = document.getElementById('admin-modal');
+        const closeAdminBtn = document.getElementById('close-admin-btn');
+        const saveQBtn = document.getElementById('save-q-btn');
+
+        let width, height;
+        let gameActive = false;
+        let wasRunningBeforeAdmin = false;
+        let score = 0;
+        let health = 100;
+        
+        let bullets = [];
+        let enemies = [];
+        let quizSession = null;
+
+        // 預設題庫 (修正了拼字錯誤: options)
+        const defaultQuizData = [
+            { q: "下列何者為「辨」的正確造詞？", options: ["辨別", "辨子", "爭辨", "花辨"], correctVal: "辨別" },
+            { q: "下列何者為「燥」的正確造詞？", options: ["乾燥", "急燥", "燥音", "腥燥"], correctVal: "乾燥" },
+            { q: "下列何者為「厲」的正確造詞？", options: ["厲害", "再接再厲", "變本加厲", "勵行"], correctVal: "厲害" },
+            { q: "下列何者為「撤」的正確造詞？", options: ["撤退", "澈底", "清撤", "貫撤"], correctVal: "撤退" },
+            { q: "下列何者為「洞」的正確造詞？", options: ["洞穴", "洞物", "洞態", "冷洞"], correctVal: "洞穴" },
+        ];
+
+        let masterQuizData = [...defaultQuizData];
+        let currentQuizPool = [];
+
+        function loadQuiz() {
+            const saved = localStorage.getItem('sky_fighter_quiz_data');
+            if (saved) {
+                try {
+                    masterQuizData = JSON.parse(saved);
+                } catch(e) {
+                    masterQuizData = [...defaultQuizData];
+                }
+            }
+        }
+
+        function saveQuiz() {
+            localStorage.setItem('sky_fighter_quiz_data', JSON.stringify(masterQuizData));
+            renderAdminList();
+        }
+
+        function renderAdminList() {
+            const list = document.getElementById('question-list');
+            list.innerHTML = masterQuizData.map((item, i) => `
+                <div class="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 text-sm">
+                    <div class="truncate pr-4 flex flex-col">
+                        <span class="text-white/80">${i + 1}. ${item.q}</span>
+                        <span class="text-[10px] text-yellow-400">正確答案: ${item.correctVal}</span>
+                    </div>
+                    <button onclick="deleteQuestion(${i})" class="text-red-400 p-2">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        window.deleteQuestion = (i) => {
+            if(confirm("確定刪除？")) { masterQuizData.splice(i, 1); saveQuiz(); }
+        }
+
+        saveQBtn.onclick = () => {
+            const q = document.getElementById('new-q').value;
+            const opts = [
+                document.getElementById('opt-0').value,
+                document.getElementById('opt-1').value,
+                document.getElementById('opt-2').value,
+                document.getElementById('opt-3').value
+            ];
+            const cIdx = parseInt(document.getElementById('correct-idx').value);
+            if (!q || opts.some(o => !o)) return alert("請填寫完整題目內容");
+            masterQuizData.push({ q, options: opts, correctVal: opts[cIdx] });
+            saveQuiz();
+            document.getElementById('new-q').value = "";
+        };
+
+        adminEntrance.onclick = () => {
+            wasRunningBeforeAdmin = gameActive;
+            gameActive = false;
+            setTimeout(() => {
+                const pw = prompt("請輸入管理授權碼：");
+                if (pw === "XU3TP6BJO4") {
+                    adminModal.classList.remove('hidden');
+                    renderAdminList();
+                } else {
+                    if (pw !== null) alert("授權碼錯誤");
+                    if (wasRunningBeforeAdmin) {
+                        gameActive = true;
+                        animate();
+                    }
+                }
+            }, 50);
+        };
+
+        closeAdminBtn.onclick = () => {
+            adminModal.classList.add('hidden');
+            if (wasRunningBeforeAdmin) {
+                gameActive = true;
+                animate();
+            }
+        };
+
+        const player = {
+            x: 0, y: 0, targetX: 0, speed: 0.18, 
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                const flameSize = 10 + Math.random() * 10;
+                ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.ellipse(0, 35, 8, flameSize, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#f8fafc'; ctx.beginPath();
+                ctx.moveTo(0, -30); ctx.lineTo(25, 20); ctx.lineTo(10, 15); ctx.lineTo(8, 25);
+                ctx.lineTo(-8, 25); ctx.lineTo(-10, 15); ctx.lineTo(-25, 20); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.ellipse(0, -5, 6, 12, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            },
+            update() {
+                this.x += (this.targetX - this.x) * this.speed;
+                if (this.x < 30) this.x = 30;
+                if (this.x > width - 30) this.x = width - 30;
+            }
+        };
+
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            canvas.width = width; canvas.height = height;
+            player.x = width / 2; player.y = height * 0.85; player.targetX = width / 2;
+        }
+
+        function handleMove(e) {
+            if (!gameActive) return;
+            let cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const rect = canvas.getBoundingClientRect();
+            player.targetX = cx - rect.left;
+        }
+
+        window.addEventListener('resize', resize);
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchstart', handleMove, {passive: false});
+        canvas.addEventListener('touchmove', handleMove, {passive: false});
+
+        class Bullet {
+            constructor(x, y) { this.x = x; this.y = y; this.speed = 12; }
+            draw() { ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(this.x, this.y, 3, 0, Math.PI*2); ctx.fill(); }
+            update() { this.y -= this.speed; }
+        }
+
+        class Enemy {
+            constructor(isGold = false) {
+                this.x = Math.random() * (width - 60) + 30;
+                this.y = -50;
+                this.speed = isGold ? 1.5 : (2 + Math.random() * 3);
+                this.hp = isGold ? 5 : 1;
+                this.color = isGold ? '#fbbf24' : '#ef4444';
+                this.isGold = isGold;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.moveTo(this.x, this.y + 20); ctx.lineTo(this.x - 20, this.y - 10); ctx.lineTo(this.x + 20, this.y - 10); ctx.closePath(); ctx.fill();
+            }
+            update() { this.y += this.speed; }
+        }
+
+        class Quiz {
+            constructor() {
+                if (currentQuizPool.length === 0) currentQuizPool = [...masterQuizData].sort(()=>Math.random()-0.5);
+                const data = currentQuizPool.pop() || defaultQuizData[0];
+                this.question = data.q;
+                
+                // 防呆處理：確保 options 是可迭代的
+                const rawOptions = data.options || data.optioms || ["無選項", "無選項", "無選項", "無選項"];
+                const shuffled = [...rawOptions].sort(() => Math.random() - 0.5);
+                
+                this.options = shuffled;
+                this.correctIndex = shuffled.indexOf(data.correctVal);
+                this.correctVal = data.correctVal;
+                this.y = -150; this.optionsY = -350; this.showOptions = false;
+                this.speed = (height * 0.85) / (4 * 60); 
+                setTimeout(() => { if(gameActive) this.showOptions = true; }, 1500);
+            }
+            draw() {
+                ctx.fillStyle = 'rgba(30, 58, 138, 0.9)'; ctx.fillRect(20, this.y, width - 40, 80);
+                ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(this.question, width / 2, this.y + 48);
+                if (this.showOptions) {
+                    const bw = width / 4;
+                    this.options.forEach((opt, i) => {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; ctx.fillRect(i * bw + 5, this.optionsY, bw - 10, 60);
+                        ctx.fillStyle = '#1e3a8a'; ctx.font = 'bold 16px sans-serif';
+                        ctx.fillText(opt, i * bw + bw / 2, this.optionsY + 38);
+                    });
+                }
+            }
+            update() {
+                if (this.y < 60) this.y += 5;
+                if (this.showOptions) this.optionsY += this.speed;
+            }
+        }
+
+        let frameCount = 0;
+        let lastQuizTime = 0;
+
+        function animate() {
+            if (!gameActive) return;
+            ctx.fillStyle = '#38bdf8'; ctx.fillRect(0, 0, width, height);
+
+            player.update(); player.draw();
+
+            // --- 持續開火：不論是否有題目 ---
+            if (frameCount % 8 === 0) bullets.push(new Bullet(player.x, player.y - 20));
+
+            // --- 敵機生成邏輯 ---
+            // 只有在【沒有題目】的時候才產生新的敵機
+            if (!quizSession) {
+                if (frameCount % 45 === 0) enemies.push(new Enemy(Math.random() < 0.1));
+            }
+
+            // --- 觸發題目 ---
+            if (!quizSession && Date.now() - lastQuizTime > 8000 && frameCount > 100) {
+                quizSession = new Quiz();
+            }
+
+            bullets.forEach((b, i) => { b.update(); b.draw(); if (b.y < -10) bullets.splice(i, 1); });
+
+            enemies.forEach((e, ei) => {
+                e.update(); e.draw();
+                bullets.forEach((b, bi) => {
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < 25) {
+                        e.hp--; bullets.splice(bi, 1);
+                        if (e.hp <= 0) {
+                            enemies.splice(ei, 1);
+                            score += e.isGold ? 1000 : 100;
+                            scoreEl.innerText = score.toString().padStart(4, '0');
+                        }
+                    }
+                });
+                if (Math.hypot(player.x - e.x, player.y - e.y) < 40) {
+                    health -= 20; healthBar.style.width = `${health}%`;
+                    enemies.splice(ei, 1);
+                    if (health <= 0) gameOver("任務失敗，戰機受損！");
+                }
+                if (e.y > height + 50) enemies.splice(ei, 1);
+            });
+
+            if (quizSession) {
+                quizSession.update(); quizSession.draw();
+                if (quizSession.showOptions && quizSession.optionsY + 60 > player.y - 10) {
+                    const idx = Math.floor(player.x / (width / 4));
+                    if (idx === quizSession.correctIndex) {
+                        score += 500; scoreEl.innerText = score.toString().padStart(4, '0');
+                        quizSession = null; lastQuizTime = Date.now();
+                    } else {
+                        gameOver("答錯了！正確答案是: " + quizSession.correctVal);
+                    }
+                }
+            }
+
+            frameCount++;
+            requestAnimationFrame(animate);
+        }
+
+        function gameOver(msg) {
+            gameActive = false;
+            menu.classList.remove('hidden');
+            menu.querySelector('h1').innerText = "MISSION FAILED";
+            menu.querySelector('p').innerText = msg + "\n得分: " + score;
+        }
+
+        function startGame() {
+            score = 0; health = 100; scoreEl.innerText = "0000"; healthBar.style.width = "100%";
+            bullets = []; enemies = []; quizSession = null;
+            currentQuizPool = [...masterQuizData].sort(()=>Math.random()-0.5);
+            lastQuizTime = Date.now(); gameActive = true; menu.classList.add('hidden');
+            animate();
+        }
+
+        startBtn.addEventListener('click', startGame);
+        window.onload = () => { loadQuiz(); resize(); ctx.fillStyle = '#38bdf8'; ctx.fillRect(0, 0, width, height); player.draw(); };
+    </script>
+</body>
+</html>
